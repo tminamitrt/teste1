@@ -32,7 +32,7 @@ jobs:
           set -euo pipefail
           [[ "$CLIENTE" =~ ^[a-z0-9-]+$ ]] || { echo "Cliente inválido"; exit 1; }
           [[ "$CAMINHO" =~ ^[a-z0-9-]+(/[a-z0-9-]+)*$ ]] || { echo "Caminho inválido"; exit 1; }
-          [ -f "produtos/$CAMINHO/index.html" ] || { echo "Protótipo não existe"; exit 1; }
+          [ -f "produtos/$CLIENTE/$CAMINHO/index.html" ] || { echo "Protótipo não existe"; exit 1; }
 
           mkdir -p externo
           touch "externo/$CLIENTE.txt"
