@@ -1,4 +1,4 @@
-name: Publicar internos
+name: Interno
 
 on:
   push:
@@ -13,7 +13,7 @@ permissions:
   pull-requests: write
 
 concurrency:
-  group: internos-${{ github.event.pull_request.number || github.ref }}
+  group: interno-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
