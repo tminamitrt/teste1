@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       cliente:
-        description: 'Cliente (ex.: acme)'
+        description: 'Cliente (ex.: agata)'
         required: true
         type: string
       caminho:
