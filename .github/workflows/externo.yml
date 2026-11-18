@@ -3,9 +3,14 @@ name: Externo (cliente)
 on:
   workflow_dispatch:
     inputs:
-      caminho:
-        description: 'Protótipo (ex.: home/v2)'
+      cliente:
+        description: 'Cliente (ex.: agata)'
         required: true
+        type: string
+      caminho:
+        description: 'Protótipo (ex.: home/v1)'
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -15,17 +20,44 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     environment: cliente
+
     steps:
       - uses: actions/checkout@v5
+
       - name: Validar e montar pacote
+        shell: bash
         env:
           CAMINHO: ${{ inputs.caminho }}
         run: |
-          [[ "$CAMINHO" =~ ^[a-z0-9-]+/[a-z0-9-]+/v[0-9]+$ ]] || { echo "Caminho inválido"; exit 1; }
-          [ -f "produtos/$CAMINHO/index.html" ] || { echo "Protótipo não existe"; exit 1; }
+          set -euo pipefail
+
+          echo "Caminho informado: $CAMINHO"
+
+          # Aceita caminhos com um ou vários níveis
+          [[ "$CAMINHO" =~ ^[a-z0-9-]+(/[a-z0-9-]+)*$ ]] || {
+            echo "Caminho inválido: $CAMINHO"
+            exit 1
+          }
+
+          # Verifica se o protótipo existe
+          ORIGEM="produtos/$CAMINHO"
+
+          [ -f "$ORIGEM/index.html" ] || {
+            echo "Protótipo não existe: $ORIGEM/index.html"
+            exit 1
+          }
+
+          # Monta pacote para publicação
           mkdir -p "clientes/$CAMINHO"
-          cp -r "produtos/$CAMINHO/." "clientes/$CAMINHO/"
+
+          cp -r "$ORIGEM/." "clientes/$CAMINHO/"
+
+          # Configura cabeçalhos de segurança
           printf '/*\n  X-Robots-Tag: noindex, nofollow\n' > clientes/_headers
+
+          echo "Pacote montado com sucesso!"
+          echo "Destino: clientes/$CAMINHO"
+
       - uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
