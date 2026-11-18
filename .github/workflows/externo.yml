@@ -1,10 +1,10 @@
-name: Externo (cliente)
+name: Externo (clientes)
 
 on:
   workflow_dispatch:
     inputs:
       cliente:
-        description: 'Cliente (ex.: agata)'
+        description: 'Cliente (ex.: acme)'
         required: true
         type: string
       caminho:
@@ -13,53 +13,35 @@ on:
         type: string
 
 permissions:
-  contents: read
+  contents: write
+  pull-requests: write
 
 jobs:
-  publicar:
+  liberar:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
-    environment: cliente
-
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v5
 
-      - name: Validar e montar pacote
+      - name: Validar e adicionar à lista
         shell: bash
         env:
+          CLIENTE: ${{ inputs.cliente }}
           CAMINHO: ${{ inputs.caminho }}
         run: |
           set -euo pipefail
+          [[ "$CLIENTE" =~ ^[a-z0-9-]+$ ]] || { echo "Cliente inválido"; exit 1; }
+          [[ "$CAMINHO" =~ ^[a-z0-9-]+(/[a-z0-9-]+)*$ ]] || { echo "Caminho inválido"; exit 1; }
+          [ -f "produtos/$CAMINHO/index.html" ] || { echo "Protótipo não existe"; exit 1; }
 
-          echo "Caminho informado: $CAMINHO"
+          mkdir -p externo
+          touch "externo/$CLIENTE.txt"
+          grep -qxF "$CAMINHO" "externo/$CLIENTE.txt" || echo "$CAMINHO" >> "externo/$CLIENTE.txt"
 
-          # Aceita caminhos com um ou vários níveis
-          [[ "$CAMINHO" =~ ^[a-z0-9-]+(/[a-z0-9-]+)*$ ]] || {
-            echo "Caminho inválido: $CAMINHO"
-            exit 1
-          }
-
-          # Verifica se o protótipo existe
-          ORIGEM="produtos/$CAMINHO"
-
-          [ -f "$ORIGEM/index.html" ] || {
-            echo "Protótipo não existe: $ORIGEM/index.html"
-            exit 1
-          }
-
-          # Monta pacote para publicação
-          mkdir -p "clientes/$CAMINHO"
-
-          cp -r "$ORIGEM/." "clientes/$CAMINHO/"
-
-          # Configura cabeçalhos de segurança
-          printf '/*\n  X-Robots-Tag: noindex, nofollow\n' > clientes/_headers
-
-          echo "Pacote montado com sucesso!"
-          echo "Destino: clientes/$CAMINHO"
-
-      - uses: cloudflare/wrangler-action@v3
+      - name: Abrir PR
+        uses: peter-evans/create-pull-request@v7
         with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: pages deploy clientes --project-name=prototipo-ext --branch=main
+          branch: liberar/${{ inputs.cliente }}
+          title: "Liberar ${{ inputs.caminho }} para ${{ inputs.cliente }}"
+          body: "Adiciona o protótipo à lista de aprovados do cliente."
+          commit-message: "Liberar ${{ inputs.caminho }} para ${{ inputs.cliente }}"

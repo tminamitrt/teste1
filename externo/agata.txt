@@ -1,0 +1,3 @@
+# protótipos liberados para a Agata
+v1
+v2
