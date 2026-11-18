@@ -1,0 +1,33 @@
+name: Publicar para cliente
+
+on:
+  workflow_dispatch:
+    inputs:
+      caminho:
+        description: 'Protótipo (ex.: pagamentos/checkout/v2)'
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  publicar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: cliente
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validar e montar pacote
+        env:
+          CAMINHO: ${{ inputs.caminho }}
+        run: |
+          [[ "$CAMINHO" =~ ^[a-z0-9-]+/[a-z0-9-]+/v[0-9]+$ ]] || { echo "Caminho inválido"; exit 1; }
+          [ -f "produtos/$CAMINHO/index.html" ] || { echo "Protótipo não existe"; exit 1; }
+          mkdir -p "clientes/$CAMINHO"
+          cp -r "produtos/$CAMINHO/." "clientes/$CAMINHO/"
+          printf '/*\n  X-Robots-Tag: noindex, nofollow\n' > clientes/_headers
+      - uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy clientes --project-name=prototipo-ext --branch=main
