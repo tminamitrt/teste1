@@ -1,2 +1,2 @@
 # protótipos liberados para Cocamar
-v1
+v1v2
