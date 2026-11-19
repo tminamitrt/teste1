@@ -1,0 +1,47 @@
+name: Liberar para cliente
+
+on:
+  workflow_dispatch:
+    inputs:
+      cliente:
+        description: 'Cliente (ex.: agata)'
+        required: true
+        type: string
+      caminho:
+        description: 'Versão do protótipo (ex.: v1)'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  liberar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Validar e adicionar à lista
+        shell: bash
+        env:
+          CLIENTE: ${{ inputs.cliente }}
+          CAMINHO: ${{ inputs.caminho }}
+        run: |
+          set -euo pipefail
+          [[ "$CLIENTE" =~ ^[a-z0-9-]+$ ]] || { echo "Cliente inválido"; exit 1; }
+          [[ "$CAMINHO" =~ ^[a-z0-9-]+(/[a-z0-9-]+)*$ ]] || { echo "Caminho inválido"; exit 1; }
+          [ -f "produtos/$CLIENTE/$CAMINHO/index.html" ] || { echo "Protótipo não existe: produtos/$CLIENTE/$CAMINHO/index.html"; exit 1; }
+
+          mkdir -p externo
+          touch "externo/$CLIENTE.txt"
+          grep -qxF "$CAMINHO" "externo/$CLIENTE.txt" || echo "$CAMINHO" >> "externo/$CLIENTE.txt"
+
+      - name: Abrir PR
+        uses: peter-evans/create-pull-request@v7
+        with:
+          branch: liberar/${{ inputs.cliente }}
+          title: "Liberar ${{ inputs.caminho }} para ${{ inputs.cliente }}"
+          body: "Adiciona o protótipo à lista de aprovados do cliente."
+          commit-message: "Liberar ${{ inputs.caminho }} para ${{ inputs.cliente }}"

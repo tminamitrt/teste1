@@ -1,47 +1,64 @@
-name: Externo (clientes)
+name: Externo
 
 on:
   workflow_dispatch:
-    inputs:
-      cliente:
-        description: 'Cliente (ex.: agata)'
-        required: true
-        type: string
-      caminho:
-        description: 'Protótipo (ex.: home/v1)'
-        required: true
-        type: string
+  push:
+    branches: [main]
+    paths: ['externo/*.txt']
 
 permissions:
-  contents: write
-  pull-requests: write
+  contents: read
+
+concurrency:
+  group: externo
+  cancel-in-progress: false
 
 jobs:
-  liberar:
+  publicar:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 10
+    environment: cliente
+
     steps:
       - uses: actions/checkout@v5
 
-      - name: Validar e adicionar à lista
+      - name: Montar pacote por cliente
         shell: bash
-        env:
-          CLIENTE: ${{ inputs.cliente }}
-          CAMINHO: ${{ inputs.caminho }}
         run: |
           set -euo pipefail
-          [[ "$CLIENTE" =~ ^[a-z0-9-]+$ ]] || { echo "Cliente inválido"; exit 1; }
-          [[ "$CAMINHO" =~ ^[a-z0-9-]+(/[a-z0-9-]+)*$ ]] || { echo "Caminho inválido"; exit 1; }
-          [ -f "produtos/$CLIENTE/$CAMINHO/index.html" ] || { echo "Protótipo não existe"; exit 1; }
+          rm -rf clientes && mkdir -p clientes
 
-          mkdir -p externo
-          touch "externo/$CLIENTE.txt"
-          grep -qxF "$CAMINHO" "externo/$CLIENTE.txt" || echo "$CAMINHO" >> "externo/$CLIENTE.txt"
+          for LISTA in externo/*.txt; do
+            [ -e "$LISTA" ] || continue
+            CLIENTE="$(basename "$LISTA" .txt)"
+            [[ "$CLIENTE" =~ ^[a-z0-9-]+$ ]] || { echo "Cliente inválido: $CLIENTE"; exit 1; }
+            mkdir -p "clientes/$CLIENTE"
+            indice=""
 
-      - name: Abrir PR
-        uses: peter-evans/create-pull-request@v7
+            while IFS= read -r CAMINHO || [ -n "$CAMINHO" ]; do
+              CAMINHO="${CAMINHO//$'\r'/}"
+              if [[ -z "$CAMINHO" || "$CAMINHO" == \#* ]]; then continue; fi
+
+              [[ "$CAMINHO" =~ ^[a-z0-9-]+(/[a-z0-9-]+)*$ ]] || { echo "Caminho inválido: $CAMINHO"; exit 1; }
+
+              ORIGEM="produtos/$CLIENTE/$CAMINHO"
+              [ -f "$ORIGEM/index.html" ] || { echo "Não existe: $ORIGEM/index.html"; exit 1; }
+
+              mkdir -p "clientes/$CLIENTE/$CAMINHO"
+              cp -r "$ORIGEM/." "clientes/$CLIENTE/$CAMINHO/"
+              indice+="<li><a href=\"$CAMINHO/\">$CAMINHO</a></li>"
+              echo "[$CLIENTE] incluído: $CAMINHO"
+            done < "$LISTA"
+
+            printf '<!doctype html><meta charset="utf-8"><title>Protótipos</title><h1>Protótipos</h1><ul>%s</ul>' "$indice" > "clientes/$CLIENTE/index.html"
+          done
+
+          printf '<!doctype html><meta charset="utf-8"><title>Acesso restrito</title>' > clientes/index.html
+          printf '/*\n  X-Robots-Tag: noindex, nofollow\n' > clientes/_headers
+
+      - name: Deploy no Cloudflare Pages
+        uses: cloudflare/wrangler-action@v3
         with:
-          branch: liberar/${{ inputs.cliente }}
-          title: "Liberar ${{ inputs.caminho }} para ${{ inputs.cliente }}"
-          body: "Adiciona o protótipo à lista de aprovados do cliente."
-          commit-message: "Liberar ${{ inputs.caminho }} para ${{ inputs.cliente }}"
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy clientes --project-name=prototipo-ext --branch=main
